@@ -1,3 +1,4 @@
+# Automap.jl
 ### To start:
 
 Start Julia with the environment of the package activated. This is currently necessary. Start julia with more threads than available. Finally, set up the environment via `] instantiate`.
