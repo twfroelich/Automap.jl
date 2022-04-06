@@ -1,67 +1,61 @@
-# Data Parallel Training for Flux.jl
-
-[![Docs](https://img.shields.io/badge/Docs-dev-blue)](https://dhairyalgandhi.github.io/ResNetImageNet.jl/dev)
-
-Modern large scale deep learning models have increased in size and number of parameters substaintially. This aims to provide tools and mechanisms to scale training of Flux.jl models over multiple GPUs. 
-
-Supports both task based and process based parallelism. The former is suited to single-node parallelism, and the latter to multi-node training. Multi-node training is handled by the same design as multiple locally installed GPU clusters using process based parallelism.
-
-## Basic Usage
-
-* In the `bin` directory, you would find `driver.jl` which has all the initial configuration and a high level function designed to start the training loop
-* One would notice that the function takes in several arguments and even more keyword arguments. Most of them have sensible defaults but it is worth mentioning a few ones of interest.
-* Start a `julia` command with more threads than the number of logical cores available
-* By default, `driver.jl` starts 4 workers, implying training would happen on 4 GPUs. This may be tweaked according to the number of GPUs available.
-* This demo is written with heterogenous file loading in mind, such that the data to be trained may be from a local filsystem or hosted remotely (such as on Amazon AWS S3 bucket).
-
+# Automap.jl
 ### To start:
 
 Start Julia with the environment of the package activated. This is currently necessary. Start julia with more threads than available. Finally, set up the environment via `] instantiate`.
 
-There is a `Data.toml` in the repo which has a few example Datasets. The package uses the `"imagenet_cyclops"` data set by default. Make sure to update the path to where in the system the a dataset is available. In the future, this requirement will be lifted in favour of an API to configure this path in code.
-
-Here is an example of a simple task based parallel training demo.
+There is a `Data.toml` in the repo which has a few example Datasets. The package uses the `"automap_cyclops"` data set by default. Make sure to update the path to where in the system the a dataset is available.
 
 ```julia
-julia> using ResNetImageNet, Flux, Metalhead, DataSets
+julia> using Automap, Flux, Metalhead, DataSets, CUDA, Optimisers, HDF5, FFTW, Images
 
-julia> classes = 1:1000
-1:1000
+julia> Automap_model = function Automap(patch_size,dropout)
+         m = Chain(  
+             Flux.Dense((patch_size).^2*2, (patch_size).^2, tanh),
+             Flux.Dropout(dropout),
+             Flux.Dense((patch_size).^2, (patch_size).^2, tanh),
+             Flux.Dropout(dropout),
+             x -> reshape(x, (patch_size,patch_size,1,:)),
+             Flux.Conv((5,5), 1 => patch_size,    relu; stride = 1, pad = 2),
+             Flux.Dropout(dropout),
+             Flux.Conv((5,5), patch_size => patch_size,   relu; stride = 1, pad = 2),
+             Flux.Dropout(dropout),
+             Flux.ConvTranspose((7,7), patch_size => 1; stride = 1, pad = 3),
+             Flux.flatten,
+         )
+         return m
+       end
 
-julia> model = ResNet34();
+julia> model = Automap_model(64,0.004);
 
-julia> key = open(BlobTree, DataSets.dataset("imagenet")) do data_tree
-         ResNetImageNet.train_solutions(data_tree, path"LOC_train_solution.csv", classes)
-       end;
+julia> key = open(BlobTree, DataSets.dataset("automap_cyclops")) do data_tree
+                Automap.train_solutions(data_tree, path"train_data_key.csv")
+              end;
 
-julia> val = open(BlobTree, DataSets.dataset("imagenet")) do data_tree
-         ResNetImageNet.train_solutions(data_tree, path"LOC_val_solution.csv", classes)
-       end;
+julia> val = open(BlobTree, DataSets.dataset("automap_cyclops")) do data_tree
+                Automap.train_solutions(data_tree, path"val_data_key.csv")
+              end;
 
-julia> opt = Optimisers.Momentum()
-Optimisers.Momentum{Float32}(0.01f0, 0.9f0)
+julia> opt = Optimisers.RMSProp(2e-6,0.6)
+Optimisers.RMSProp{Float64}(2.0e-6, 0.6, 2.220446049250313e-16)
 
 julia> setup, buffer = prepare_training(model, key,
                                         CUDA.devices(),
                                         opt, # optimizer
-                                        96,  # batchsize per GPU
+                                        3,  # batchsize per GPU
                                         epochs = 2);
 
-julia> loss = Flux.Losses.logitcrossentropy
-logitcrossentropy (generic function with 1 method)
+julia> loss = Flux.Losses.mse
+mse (generic function with 1 method)
 
-julia> ResNetImageNet.train(loss, setup, buffer, opt,
+julia> Automap.train(loss, setup, buffer, opt,
                             val = val,
                             sched = identity);
 ```
 
-Here `model` describes the model to train, `key` describes a table of data and how it may be accessed. For the purposes of the demo, this is taken from the `LOC_train_solution.csv` published by ImageNet alongside the images. Look at `train_solutions` which would allow access to the training validation and test sets.
+Here `model` is specifically referring to Automap but can be subsituted for others, `key` describes a table of data and how it may be accessed. This table was generated for the NYU FASTMRI single knee dataset. See `test_fun.jl` for the functions used to generate these `key`s. It is important to note that the structure of the dataset is such that each `.h5` file contains an random number of complex images (i.e. file_001.h5 may contain 200 images and file_012.h5 may contain 10). The code iterates though each image in a given data file and resizes them to 64x64 to ensure they fit in memory. The resulting data will look somehting like file_001.h5 -> 64x64x200 and file_012.h5 -> 64x64x10.
 
-`loss` is a typical loss function used to train a large neural network. The current system is set up for supervised learning, with support for semi supervised learning coming soon. More information can be found in the documentation.
+Look at `train_solutions` which would allow access to the training validation and test sets.
 
-### For process based parallelism - multi-node parallelism
+`loss` is a typical loss function used to train a large neural network.
 
-`rcs` and `updated_grads_channel` are `RemoteChannel` between the first process and all the child processes. These are used to send gradients back and forth in order to synchronise them to perform data parallel training.
-
-`syncgrads` starts a task on the main process which continually monitors for gradients coming in from all the available processes and does a manual synchrnisation and sends the updated gradients back to the processes. These gradients are what ultimately trains sent to optimise the model.
 # Automap.jl
