@@ -1,4 +1,7 @@
 # Automap.jl
+
+This work is based off of ResNetImageNet.jl created by Dhairya L Gandhi. For the original project, see https://github.com/DhairyaLGandhi/ResNetImageNet.jl
+
 ### To start:
 
 Start Julia with the environment of the package activated. This is currently necessary. Start julia with more threads than available. Finally, set up the environment via `] instantiate`.
