@@ -60,5 +60,3 @@ Here `model` is specifically referring to Automap but can be subsituted for othe
 Look at `train_solutions` which would allow access to the training validation and test sets.
 
 `loss` is a typical loss function used to train a large neural network.
-
-# Automap.jl
