@@ -28,7 +28,7 @@ julia> function Automap(patch_size,dropout)
          return m
        end
 
-julia> model = Automap_model(64,0.004);
+julia> model = Automap(64,0.004);
 
 julia> key = open(BlobTree, DataSets.dataset("automap_cyclops")) do data_tree
                 Automap.train_solutions(data_tree, path"train_data_key.csv")
