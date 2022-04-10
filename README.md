@@ -11,7 +11,7 @@ There is a `Data.toml` in the repo which has a few example Datasets. The package
 ```julia
 julia> using Automap, Flux, Metalhead, DataSets, CUDA, Optimisers, HDF5, FFTW, Images
 
-julia> Automap_model = function Automap(patch_size,dropout)
+julia> function Automap(patch_size,dropout)
          m = Chain(  
              Flux.Dense((patch_size).^2*2, (patch_size).^2, tanh),
              Flux.Dropout(dropout),
